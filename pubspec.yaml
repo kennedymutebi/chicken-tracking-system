@@ -1,0 +1,61 @@
+name: poultry_farming_app
+description: A comprehensive poultry farming management app for tracking expenses, feed, sales, and profits.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  
+  # State Management
+  provider: ^6.1.1
+
+  # Database & Storage
+  sqflite: ^2.3.0
+  shared_preferences: ^2.0.5
+  flutter_secure_storage: ^9.0.0
+  path_provider: ^2.1.1
+
+  # Network & API
+  http: ^1.1.0
+
+  # PDF & File Handling
+  pdf: ^3.10.7
+  file_picker: ^8.1.2
+  image_picker: ^1.0.4
+  permission_handler: ^11.1.0
+
+  # Charts & Visualization
+  fl_chart: ^0.66.0
+
+  # Utilities
+  email_validator: ^2.1.17
+
+  # UI Components
+  cupertino_icons: ^1.0.6
+  intl: ^0.17.0
+  firebase_core: ^3.13.1
+  firebase_auth: ^5.5.4
+  cloud_firestore: ^5.6.8
+  firebase_storage: ^12.4.6
+  firebase_messaging: ^15.2.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  #dependencies:
+  
+
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+  
+

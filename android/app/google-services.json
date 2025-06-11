@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "467388574018",
+    "project_id": "poultryfarmapp-31135",
+    "storage_bucket": "poultryfarmapp-31135.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:467388574018:android:c4ef48af71c673819440db",
+        "android_client_info": {
+          "package_name": "com.example.chicken_tracking_system"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB1_Mda1QCIx6S010-YzBZKMtptma3flB4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
