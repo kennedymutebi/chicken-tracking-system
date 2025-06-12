@@ -1,6 +1,83 @@
+import 'dart:io';
+import 'dart:typed_data'; // Added for web compatibility
+import 'package:flutter/foundation.dart'; // Added for kIsWeb
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:path/path.dart' as path;
 import 'package:poultry_farming_app/screens/dashboard/farmer_search_page.dart';
 import 'package:poultry_farming_app/screens/dashboard/chart_screen.dart';
+
+// Product model
+class Product {
+  final String id;
+  final String title;
+  final String description;
+  final String price;
+  final String farmer;
+  final String location;
+  final String contact;
+  final int stock;
+  final String category;
+  final List<String> imageUrls;
+  final bool isNew;
+  final String farmerId;
+  final DateTime createdAt;
+
+  Product({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.price,
+    required this.farmer,
+    required this.location,
+    required this.contact,
+    required this.stock,
+    required this.category,
+    required this.imageUrls,
+    required this.isNew,
+    required this.farmerId,
+    required this.createdAt,
+  });
+
+  factory Product.fromFirestore(DocumentSnapshot doc) {
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    return Product(
+      id: doc.id,
+      title: data['title'] ?? '',
+      description: data['description'] ?? '',
+      price: data['price'] ?? '',
+      farmer: data['farmer'] ?? '',
+      location: data['location'] ?? '',
+      contact: data['contact'] ?? '',
+      stock: data['stock'] ?? 0,
+      category: data['category'] ?? '',
+      imageUrls: List<String>.from(data['imageUrls'] ?? []),
+      isNew: data['isNew'] ?? false,
+      farmerId: data['farmerId'] ?? '',
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toFirestore() {
+    return {
+      'title': title,
+      'description': description,
+      'price': price,
+      'farmer': farmer,
+      'location': location,
+      'contact': contact,
+      'stock': stock,
+      'category': category,
+      'imageUrls': imageUrls,
+      'isNew': isNew,
+      'farmerId': farmerId,
+      'createdAt': Timestamp.fromDate(createdAt),
+    };
+  }
+}
 
 class FarmMarketPage extends StatefulWidget {
   const FarmMarketPage({Key? key}) : super(key: key);
@@ -11,98 +88,639 @@ class FarmMarketPage extends StatefulWidget {
 
 class _FarmMarketPageState extends State<FarmMarketPage> {
   int _currentIndex = 0;
-  List<String> notifications = [
-    "New organic eggs available from Kampala Farm!",
-    "Premium broiler chicks - Limited stock!",
-    "Fresh kienyeji chickens from Mukono region",
-  ];
+  String _selectedCategory = 'All';
+  List<String> notifications = [];
 
-  final List<Map<String, dynamic>> products = [
-    {
-      'id': '1',
-      'title': 'Broiler Chicks',
-      'description': 'Healthy 1-week-old broiler chicks, vaccinated and ready for growth',
-      'price': 'UGX 2,500 each',
-      'farmer': 'John Ssebunya',
-      'location': 'Kampala',
-      'contact': '+256 700 123 456',
-      'stock': 150,
-      'category': 'Chicks',
-      'image': 'assets/images/brolier.jpg',
-      'isNew': true,
-      'avatar': 'assets/images/farmer1.jpg',
-    },
-    {
-      'id': '2',
-      'title': 'Kienyeji Eggs',
-      'description': 'Fresh organic kienyeji eggs, collected daily from free-range hens',
-      'price': 'UGX 12,000 per tray',
-      'farmer': 'Mary Nakato',
-      'location': 'Mukono',
-      'contact': '+256 701 234 567',
-      'stock': 50,
-      'category': 'Eggs',
-      'image': 'assets/images/3.jpg',
-      'isNew': false,
-      'avatar': 'assets/images/farmer2.jpg',
-    },
-    {
-      'id': '3',
-      'title': 'Layer Chicks',
-      'description': 'Day-old layer chicks, high egg production breed',
-      'price': 'UGX 3,000 each',
-      'farmer': 'Paul Mukasa',
-      'location': 'Entebbe',
-      'contact': '+256 702 345 678',
-      'stock': 200,
-      'category': 'Chicks',
-      'image': 'assets/images/brown-hen.jpg',
-      'isNew': true,
-      'avatar': 'assets/images/farmer3.jpg',
-    },
-    {
-      'id': '4',
-      'title': 'Mature Hens',
-      'description': 'Point of lay hens, 18-20 weeks old, ready to start laying',
-      'price': 'UGX 25,000 each',
-      'farmer': 'Grace Namusoke',
-      'location': 'Wakiso',
-      'contact': '+256 703 456 789',
-      'stock': 75,
-      'category': 'Birds',
-      'image': 'assets/images/kenyegi.jpg',
-      'isNew': false,
-      'avatar': 'assets/images/farmer4.jpg',
-    },
-    {
-      'id': '5',
-      'title': 'Duck ',
-      'description': 'Fresh duck , larger and richer than chicken eggs',
-      'price': 'UGX 15,000 ',
-      'farmer': 'Samuel Walusimbi',
-      'location': 'Jinja',
-      'contact': '+256 704 567 890',
-      'stock': 30,
-      'category': 'Eggs',
-      'image': 'assets/images/duck.jpg',
-      'isNew': true,
-      'avatar': 'assets/images/duck.jpg',
-    },
-    {
-      'id': '6',
-      'title': 'Turkey Poults',
-      'description': 'Young turkey poults, 3 weeks old, healthy and active',
-      'price': 'UGX 8,000 each',
-      'farmer': 'Rebecca Namugga',
-      'location': 'Masaka',
-      'contact': '+256 705 678 901',
-      'stock': 40,
-      'category': 'Birds',
-      'image': 'assets/images/turkey.jpg',
-      'isNew': false,
-      'avatar': 'assets/images/farmer6.jpg',
-    },
-  ];
+  // Form controllers for adding products
+  final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _priceController = TextEditingController();
+  final _stockController = TextEditingController();
+  final _contactController = TextEditingController();
+  final _locationController = TextEditingController();
+  String _selectedProductCategory = 'Chicks';
+  List<XFile> _selectedImages = []; // Changed to XFile for web compatibility
+  bool _isUploading = false;
+
+  // Firebase instances
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseStorage _storage = FirebaseStorage.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final ImagePicker _picker = ImagePicker();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotifications();
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _priceController.dispose();
+    _stockController.dispose();
+    _contactController.dispose();
+    _locationController.dispose();
+    super.dispose();
+  }
+
+  // Load notifications from Firebase
+  void _loadNotifications() {
+    _firestore
+        .collection('notifications')
+        .where('userId', isEqualTo: _auth.currentUser?.uid)
+        .orderBy('createdAt', descending: true)
+        .limit(10)
+        .snapshots()
+        .listen((snapshot) {
+      setState(() {
+        notifications = snapshot.docs
+            .map((doc) => doc.data()['message'] as String)
+            .toList();
+      });
+    });
+  }
+
+  // Pick images from gallery
+  Future<void> _pickImages() async {
+    try {
+      final List<XFile> images = await _picker.pickMultiImage(
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 80,
+      );
+
+      if (images.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No images selected'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      if (images.length + _selectedImages.length > 5) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('You can only select up to 5 images'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      setState(() {
+        _selectedImages.addAll(images);
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Images selected successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error picking images: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Pick image from camera
+  Future<void> _pickImageFromCamera() async {
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 80,
+      );
+
+      if (image == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No image captured'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      if (_selectedImages.length >= 5) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('You can only select up to 5 images'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      setState(() {
+        _selectedImages.add(image);
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Image captured successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error taking photo: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Remove selected image
+  void _removeImage(int index) {
+    setState(() {
+      _selectedImages.removeAt(index);
+    });
+  }
+
+  // Upload images to Firebase Storage
+  Future<List<String>> _uploadImages() async {
+    List<String> downloadUrls = [];
+
+    for (int i = 0; i < _selectedImages.length; i++) {
+      XFile image = _selectedImages[i];
+
+      // Get the file extension
+      String extension = path.extension(image.name).toLowerCase();
+      if (extension.isEmpty) {
+        extension = '.jpg'; // Default extension
+      }
+
+      if (!['.jpg', '.jpeg', '.png', '.heic', '.webp'].contains(extension)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Unsupported image format for image ${i + 1}: $extension'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        continue;
+      }
+
+      String fileName = 'products/${DateTime.now().millisecondsSinceEpoch}_$i$extension';
+
+      try {
+        late TaskSnapshot snapshot;
+
+        if (kIsWeb) {
+          // For web: use bytes
+          Uint8List imageBytes = await image.readAsBytes();
+          snapshot = await _storage.ref().child(fileName).putData(
+                imageBytes,
+                SettableMetadata(contentType: 'image/${extension.replaceFirst('.', '')}'),
+              );
+        } else {
+          // For mobile: use file
+          File imageFile = File(image.path);
+          snapshot = await _storage.ref().child(fileName).putFile(
+                imageFile,
+                SettableMetadata(contentType: 'image/${extension.replaceFirst('.', '')}'),
+              );
+        }
+
+        String downloadUrl = await snapshot.ref.getDownloadURL();
+        downloadUrls.add(downloadUrl);
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error uploading image ${i + 1}: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+
+    return downloadUrls;
+  }
+
+  // Widget to display selected images (web compatible)
+  Widget _buildSelectedImages() {
+    if (_selectedImages.isEmpty) {
+      return Container(
+        height: 100,
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey[300]!),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Center(
+          child: Text(
+            'No images selected',
+            style: TextStyle(color: Colors.grey[600]),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      height: 100,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: _selectedImages.length,
+        itemBuilder: (context, index) {
+          return Container(
+            margin: const EdgeInsets.only(right: 8),
+            width: 100,
+            height: 100,
+            child: Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: kIsWeb
+                      ? FutureBuilder<Uint8List>(
+                          future: _selectedImages[index].readAsBytes(),
+                          builder: (context, snapshot) {
+                            if (snapshot.hasData) {
+                              return Image.memory(
+                                snapshot.data!,
+                                width: 100,
+                                height: 100,
+                                fit: BoxFit.cover,
+                              );
+                            }
+                            return Container(
+                              width: 100,
+                              height: 100,
+                              color: Colors.grey[200],
+                              child: const Center(
+                                child: CircularProgressIndicator(),
+                              ),
+                            );
+                          },
+                        )
+                      : Image.file(
+                          File(_selectedImages[index].path),
+                          width: 100,
+                          height: 100,
+                          fit: BoxFit.cover,
+                        ),
+                ),
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: GestureDetector(
+                    onTap: () => _removeImage(index),
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.close,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // Updated image selector widget
+  Widget _buildImageSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Product Images',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+        ),
+        const SizedBox(height: 8),
+        _buildSelectedImages(),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: _pickImages,
+                icon: const Icon(Icons.photo_library),
+                label: const Text('Gallery'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue[600],
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (!kIsWeb) // Camera only available on mobile
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _pickImageFromCamera,
+                  icon: const Icon(Icons.camera_alt),
+                  label: const Text('Camera'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green[600],
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Select up to 5 images (${_selectedImages.length}/5)',
+          style: TextStyle(color: Colors.grey[500], fontSize: 12),
+        ),
+      ],
+    );
+  }
+
+  // Add product to Firebase
+  Future<void> _addProduct() async {
+    if (_titleController.text.trim().isEmpty ||
+        _descriptionController.text.trim().isEmpty ||
+        _priceController.text.trim().isEmpty ||
+        _stockController.text.trim().isEmpty ||
+        _contactController.text.trim().isEmpty ||
+        _locationController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please fill in all fields'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (_selectedImages.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please add at least one image'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isUploading = true;
+    });
+
+    try {
+      // Upload images first
+      List<String> imageUrls = await _uploadImages();
+
+      if (imageUrls.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No valid images uploaded. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Create product object
+      Product product = Product(
+        id: '',
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim(),
+        price: _priceController.text.trim(),
+        farmer: _auth.currentUser?.displayName ?? 'Anonymous',
+        location: _locationController.text.trim(),
+        contact: _contactController.text.trim(),
+        stock: int.parse(_stockController.text.trim()),
+        category: _selectedProductCategory,
+        imageUrls: imageUrls,
+        isNew: true,
+        farmerId: _auth.currentUser?.uid ?? '',
+        createdAt: DateTime.now(),
+      );
+
+      // Add to Firestore
+      await _firestore.collection('products').add(product.toFirestore());
+
+      // Clear form
+      _titleController.clear();
+      _descriptionController.clear();
+      _priceController.clear();
+      _stockController.clear();
+      _contactController.clear();
+      _locationController.clear();
+      setState(() {
+        _selectedImages.clear();
+        _selectedProductCategory = 'Chicks';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Product added successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      setState(() => _currentIndex = 0);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error adding product: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() {
+        _isUploading = false;
+      });
+    }
+  }
+
+  void _showNotifications(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Notifications',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: notifications.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No notifications yet',
+                        style: TextStyle(color: Colors.grey[600], fontSize: 16),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: notifications.length,
+                      itemBuilder: (context, index) => ListTile(
+                        leading: Icon(Icons.notifications, color: Colors.green[700]),
+                        title: Text(
+                          notifications[index],
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showProductDetails(Product product) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.9,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) => SingleChildScrollView(
+          controller: scrollController,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  height: 200,
+                  child: product.imageUrls.isEmpty
+                      ? Center(
+                          child: Icon(
+                            Icons.image_not_supported,
+                            size: 100,
+                            color: Colors.grey[400],
+                          ),
+                        )
+                      : ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: product.imageUrls.length,
+                          itemBuilder: (context, index) => Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            width: 200,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.network(
+                                product.imageUrls[index],
+                                fit: BoxFit.cover,
+                                loadingBuilder: (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  return Center(
+                                    child: CircularProgressIndicator(
+                                      value: loadingProgress.expectedTotalBytes != null
+                                          ? loadingProgress.cumulativeBytesLoaded /
+                                              loadingProgress.expectedTotalBytes!
+                                          : null,
+                                    ),
+                                  );
+                                },
+                                errorBuilder: (context, error, stackTrace) => Icon(
+                                  Icons.image_not_supported,
+                                  size: 50,
+                                  color: Colors.grey[400],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  product.title,
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  product.price,
+                  style: TextStyle(
+                    fontSize: 20,
+                    color: Colors.green[700],
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Category: ${product.category}',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Stock: ${product.stock}',
+                  style: TextStyle(color: Colors.orange[700], fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Description',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  product.description,
+                  style: TextStyle(color: Colors.grey[700]),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Farmer: ${product.farmer}',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Location: ${product.location}',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Contact: ${product.contact}',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+                const SizedBox(height: 24),
+                if (product.farmerId != _auth.currentUser?.uid)
+                  ElevatedButton(
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Messaging functionality coming soon!'),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green[700],
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 50),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text('Contact Seller'),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -157,7 +775,7 @@ class _FarmMarketPageState extends State<FarmMarketPage> {
       ),
       floatingActionButton: _currentIndex == 0
           ? FloatingActionButton(
-              onPressed: () => _showAddProductDialog(context),
+              onPressed: () => setState(() => _currentIndex = 1),
               child: const Icon(Icons.add),
               backgroundColor: Colors.green[700],
             )
@@ -248,15 +866,16 @@ class _FarmMarketPageState extends State<FarmMarketPage> {
             margin: const EdgeInsets.symmetric(horizontal: 16),
             child: ListView(
               scrollDirection: Axis.horizontal,
-              children: ['All', 'Chicks', 'Eggs', 'Birds'].map((category) {
+              children: ['All', 'Chicks', 'Eggs', 'Birds', 'Feed', 'Equipment'].map((category) {
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: FilterChip(
                     label: Text(category),
-                    selected: false,
+                    selected: _selectedCategory == category,
                     onSelected: (selected) {
-                      // TODO: Implement filtering logic
-                      setState(() {});
+                      setState(() {
+                        _selectedCategory = category;
+                      });
                     },
                     selectedColor: Colors.green[100],
                     checkmarkColor: Colors.green[700],
@@ -266,29 +885,80 @@ class _FarmMarketPageState extends State<FarmMarketPage> {
             ),
           ),
         ),
-        SliverPadding(
-          padding: const EdgeInsets.all(16),
-          sliver: SliverGrid(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 0.7,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-            ),
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                final product = products[index];
-                return _buildProductCard(product);
-              },
-              childCount: products.length,
-            ),
-          ),
+        StreamBuilder<QuerySnapshot>(
+          stream: _selectedCategory == 'All'
+              ? _firestore.collection('products').orderBy('createdAt', descending: true).snapshots()
+              : _firestore.collection('products')
+                  .where('category', isEqualTo: _selectedCategory)
+                  .orderBy('createdAt', descending: true)
+                  .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return SliverToBoxAdapter(
+                child: Center(child: Text('Error: ${snapshot.error}')),
+              );
+            }
+
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const SliverToBoxAdapter(
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+
+            List<Product> products = snapshot.data!.docs
+                .map((doc) => Product.fromFirestore(doc))
+                .toList();
+
+            if (products.isEmpty) {
+              return SliverToBoxAdapter(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      children: [
+                        Icon(Icons.shopping_bag_outlined, size: 64, color: Colors.grey[400]),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No products found',
+                          style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Be the first to add a product!',
+                          style: TextStyle(color: Colors.grey[500]),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            return SliverPadding(
+              padding: const EdgeInsets.all(16),
+              sliver: SliverGrid(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 0.7,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                ),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final product = products[index];
+                    return _buildProductCard(product);
+                  },
+                  childCount: products.length,
+                ),
+              ),
+            );
+          },
         ),
       ],
     );
   }
 
-  Widget _buildProductCard(Map<String, dynamic> product) {
+  Widget _buildProductCard(Product product) {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -308,20 +978,38 @@ class _FarmMarketPageState extends State<FarmMarketPage> {
               ),
               child: Stack(
                 children: [
-                  Center(
-                    child: Image.asset(
-                      product['image'] as String,
-                      height: 120,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Icon(
-                        Icons.image_not_supported,
-                        size: 50,
-                        color: Colors.green[700],
-                      ),
-                    ),
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                    child: product.imageUrls.isNotEmpty
+                        ? Image.network(
+                            product.imageUrls.first,
+                            height: 120,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Center(
+                                child: CircularProgressIndicator(
+                                  value: loadingProgress.expectedTotalBytes != null
+                                      ? loadingProgress.cumulativeBytesLoaded /
+                                          loadingProgress.expectedTotalBytes!
+                                      : null,
+                                ),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) => Icon(
+                              Icons.image_not_supported,
+                              size: 50,
+                              color: Colors.green[700],
+                            ),
+                          )
+                        : Icon(
+                            Icons.image_not_supported,
+                            size: 50,
+                            color: Colors.green[700],
+                          ),
                   ),
-                  if (product['isNew'])
+                  if (product.isNew)
                     Positioned(
                       top: 8,
                       right: 8,
@@ -351,7 +1039,7 @@ class _FarmMarketPageState extends State<FarmMarketPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      product['title'],
+                      product.title,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
@@ -361,7 +1049,7 @@ class _FarmMarketPageState extends State<FarmMarketPage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      product['price'],
+                      product.price,
                       style: TextStyle(
                         color: Colors.green[700],
                         fontWeight: FontWeight.w600,
@@ -370,7 +1058,7 @@ class _FarmMarketPageState extends State<FarmMarketPage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${product['farmer']}',
+                      product.farmer,
                       style: TextStyle(
                         color: Colors.grey[600],
                         fontSize: 12,
@@ -379,7 +1067,7 @@ class _FarmMarketPageState extends State<FarmMarketPage> {
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(
-                      '${product['location']}',
+                      product.location,
                       style: TextStyle(
                         color: Colors.grey[500],
                         fontSize: 11,
@@ -390,7 +1078,7 @@ class _FarmMarketPageState extends State<FarmMarketPage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Stock: ${product['stock']}',
+                          'Stock: ${product.stock}',
                           style: TextStyle(
                             color: Colors.orange[700],
                             fontSize: 11,
@@ -434,14 +1122,15 @@ class _FarmMarketPageState extends State<FarmMarketPage> {
             child: SingleChildScrollView(
               child: Column(
                 children: [
-                  _buildFormField('Product Name', Icons.shopping_bag, 'e.g., Broiler Chicks'),
-                  _buildFormField('Description', Icons.description, 'Describe your product'),
-                  _buildFormField('Price (UGX)', Icons.attach_money, 'e.g., 2500 per piece'),
-                  _buildFormField('Stock Quantity', Icons.inventory, 'Available quantity'),
-                  _buildFormField('Contact Number', Icons.phone, '+256 xxx xxx xxx'),
-                  _buildFormField('Location', Icons.location_on, 'Your location'),
+                  _buildFormField(_titleController, 'Product Name', Icons.shopping_bag, 'e.g., Broiler Chicks'),
+                  _buildFormField(_descriptionController, 'Description', Icons.description, 'Describe your product', maxLines: 3),
+                  _buildFormField(_priceController, 'Price (UGX)', Icons.attach_money, 'e.g., 2500 per piece'),
+                  _buildFormField(_stockController, 'Stock Quantity', Icons.inventory, 'Available quantity', isNumber: true),
+                  _buildFormField(_contactController, 'Contact Number', Icons.phone, '+256 xxx xxx xxx'),
+                  _buildFormField(_locationController, 'Location', Icons.location_on, 'Your location'),
                   const SizedBox(height: 20),
                   DropdownButtonFormField<String>(
+                    value: _selectedProductCategory,
                     decoration: InputDecoration(
                       labelText: 'Category',
                       prefixIcon: const Icon(Icons.category),
@@ -455,64 +1144,29 @@ class _FarmMarketPageState extends State<FarmMarketPage> {
                               child: Text(category),
                             ))
                         .toList(),
-                    onChanged: (value) {},
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedProductCategory = value!;
+                      });
+                    },
                   ),
                   const SizedBox(height: 20),
-                  GestureDetector(
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Image picker would open here')),
-                      );
-                    },
-                    child: Container(
-                      height: 120,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: Colors.grey[300]!,
-                          width: 2,
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                        color: Colors.grey[50],
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.add_a_photo, size: 50, color: Colors.grey[400]),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Tap to add product images',
-                            style: TextStyle(color: Colors.grey[600]),
-                          ),
-                          Text(
-                            'Up to 5 images',
-                            style: TextStyle(color: Colors.grey[500], fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                  _buildImageSelector(), // Updated to use new image selector
                   const SizedBox(height: 30),
-                  ElevatedButton(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Product added successfully!'),
-                          backgroundColor: Colors.green,
+                  _isUploading
+                      ? const CircularProgressIndicator()
+                      : ElevatedButton(
+                          onPressed: _addProduct,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green[700],
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size(double.infinity, 50),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: const Text('Add Product to Marketplace'),
                         ),
-                      );
-                      setState(() => _currentIndex = 0);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green[700],
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size(double.infinity, 50),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Text('Add Product to Marketplace'),
-                  ),
                 ],
               ),
             ),
@@ -522,10 +1176,13 @@ class _FarmMarketPageState extends State<FarmMarketPage> {
     );
   }
 
-  Widget _buildFormField(String label, IconData icon, String hint) {
+  Widget _buildFormField(TextEditingController controller, String label, IconData icon, String hint, {int maxLines = 1, bool isNumber = false}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: TextField(
+        controller: controller,
+        maxLines: maxLines,
+        keyboardType: isNumber ? TextInputType.number : TextInputType.text,
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,
@@ -563,45 +1220,73 @@ class _FarmMarketPageState extends State<FarmMarketPage> {
           ),
         ),
         Expanded(
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.chat, size: 64, color: Colors.grey[400]),
-                const SizedBox(height: 16),
-                Text(
-                  'Find Farmers to Message',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey[600],
+          child: StreamBuilder<QuerySnapshot>(
+            stream: _firestore
+                .collection('messages')
+                .where('participants', arrayContains: _auth.currentUser?.uid)
+                .orderBy('lastMessageTime', descending: true)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              }
+
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.chat, size: 64, color: Colors.grey[400]),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No messages yet',
+                        style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Find farmers to start a conversation',
+                        style: TextStyle(color: Colors.grey[500]),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Use the search icon to find farmers',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[500],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const FarmerSearchPage()),
-                    );
-                  },
-                  icon: const Icon(Icons.search),
-                  label: const Text('Search Farmers'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green[700],
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ],
-            ),
+                );
+              }
+
+              return ListView.builder(
+                itemCount: snapshot.data!.docs.length,
+                itemBuilder: (context, index) {
+                  var messageData = snapshot.data!.docs[index].data() as Map<String, dynamic>;
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.green[100],
+                      child: Icon(Icons.person, color: Colors.green[700]),
+                    ),
+                    title: Text(
+                      messageData['otherUserName'] ?? 'Unknown',
+                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    subtitle: Text(
+                      messageData['lastMessage'] ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: Text(
+                      _formatTimestamp(messageData['lastMessageTime']),
+                      style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                    ),
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Chat functionality coming soon!')),
+                      );
+                    },
+                  );
+                },
+              );
+            },
           ),
         ),
       ],
@@ -609,321 +1294,125 @@ class _FarmMarketPageState extends State<FarmMarketPage> {
   }
 
   Widget _buildProfileView() {
-    return Padding(
+    final user = _auth.currentUser;
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const Text(
+            'Profile',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
           Center(
-            child: Column(
-              children: [
-                CircleAvatar(
-                  radius: 50,
-                  backgroundColor: Colors.green[100],
-                  child: Icon(
-                    Icons.person,
-                    size: 50,
-                    color: Colors.green[700],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Your Farm Profile',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  'Manage your marketplace presence',
-                  style: TextStyle(color: Colors.grey[600]),
-                ),
-              ],
+            child: CircleAvatar(
+              radius: 50,
+              backgroundColor: Colors.green[100],
+              child: user?.photoURL != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(50),
+                      child: Image.network(user!.photoURL!, fit: BoxFit.cover),
+                    )
+                  : Icon(Icons.person, size: 60, color: Colors.green[700]),
             ),
           ),
-          const SizedBox(height: 30),
-          _buildProfileOption('My Products', Icons.inventory, () {
-            setState(() => _currentIndex = 1);
-          }),
-          _buildProfileOption('Sales History', Icons.history, () {}),
-          _buildProfileOption('Buyer Reviews', Icons.star, () {}),
-          _buildProfileOption('Account Settings', Icons.settings, () {}),
-          _buildProfileOption('Payment Settings', Icons.payment, () {}),
-          _buildProfileOption('Help & Support', Icons.help, () {}),
-          _buildProfileOption('About Marketplace', Icons.info, () {}),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProfileOption(String title, IconData icon, VoidCallback onTap) {
-    return ListTile(
-      leading: Icon(icon, color: Colors.green[700]),
-      title: Text(title),
-      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-      onTap: onTap,
-    );
-  }
-
-  void _showNotifications(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                const Text(
-                  'Notifications',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
+          const SizedBox(height: 16),
+          Center(
+            child: Text(
+              user?.displayName ?? 'Anonymous Farmer',
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
             ),
-            const SizedBox(height: 16),
-            ...notifications.map((notification) => ListTile(
-                  leading: Icon(Icons.notifications, color: Colors.green[700]),
-                  title: Text(notification),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.close, size: 16),
-                    onPressed: () {
-                      setState(() {
-                        notifications.remove(notification);
-                      });
-                      Navigator.pop(context);
-                    },
-                  ),
-                )),
-            if (notifications.isEmpty)
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
+          ),
+          Center(
+            child: Text(
+              user?.email ?? '',
+              style: TextStyle(color: Colors.grey[600]),
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'My Products',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+          ),
+          const SizedBox(height: 8),
+          StreamBuilder<QuerySnapshot>(
+            stream: _firestore
+                .collection('products')
+                .where('farmerId', isEqualTo: user?.uid)
+                .orderBy('createdAt', descending: true)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              }
+
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                return Center(
                   child: Text(
-                    'No new notifications',
+                    'No products listed yet',
                     style: TextStyle(color: Colors.grey[600]),
                   ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
+                );
+              }
 
-  void _showProductDetails(Map<String, dynamic> product) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        minChildSize: 0.5,
-        maxChildSize: 0.9,
-        builder: (context, scrollController) => Container(
-          padding: const EdgeInsets.all(16),
-          child: SingleChildScrollView(
-            controller: scrollController,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 50,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.green[50],
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.green[200]!, width: 1),
-                      ),
-                      child: Image.asset(
-                        product['image'] as String,
-                        height: 60,
-                        width: 60,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Icon(
-                          Icons.image_not_supported,
-                          size: 40,
-                          color: Colors.green[700],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            product['title'],
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            product['price'],
-                            style: TextStyle(
-                              fontSize: 18,
-                              color: Colors.green[700],
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                const Text(
-                  'Description',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  product['description'],
-                  style: const TextStyle(fontSize: 16, height: 1.5),
-                ),
-                const SizedBox(height: 24),
-                const Text(
-                  'Farmer Details',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                _buildDetailRow('Farmer', product['farmer']),
-                _buildDetailRow('Location', product['location']),
-                _buildDetailRow('Contact', product['contact']),
-                _buildDetailRow('Available Stock', '${product['stock']} units'),
-                _buildDetailRow('Category', product['category']),
-                const SizedBox(height: 32),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => ChatPage(
-                                contactName: product['farmer'] as String,
-                                contactAvatar: product['avatar'] as String,
-                                isOnline: true,
-                                productContext: {
-                                  'productTitle': product['title'],
-                                  'productPrice': product['price'],
-                                },
-                                initialMessage:
-                                    'Hi! I\'m interested in your ${product['title']} (${product['price']}). Is it still available?',
-                              ),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.message),
-                        label: const Text('Message Farmer'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Calling ${product['contact']}'),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.phone),
-                        label: const Text('Call Now'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green[700],
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+              List<Product> products = snapshot.data!.docs
+                  .map((doc) => Product.fromFirestore(doc))
+                  .toList();
 
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              '$label:',
-              style: TextStyle(
-                fontWeight: FontWeight.w500,
-                color: Colors.grey[600],
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontSize: 16),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showAddProductDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add Product'),
-        content: const Text(
-            'Switch to the "Sell Product" tab to add your products with detailed information and images.'),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              setState(() => _currentIndex = 1);
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 0.7,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                ),
+                itemCount: products.length,
+                itemBuilder: (context, index) => _buildProductCard(products[index]),
+              );
             },
-            child: const Text('Go to Sell Product'),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: () async {
+              await _auth.signOut();
+              Navigator.of(context).pushReplacementNamed('/login');
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red[700],
+              foregroundColor: Colors.white,
+              minimumSize: const Size(double.infinity, 50),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text('Sign Out'),
           ),
         ],
       ),
     );
+  }
+
+  String _formatTimestamp(Timestamp? timestamp) {
+    if (timestamp == null) return '';
+    final dateTime = timestamp.toDate();
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inDays > 0) {
+      return '${difference.inDays}d ago';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}m ago';
+    } else {
+      return 'Just now';
+    }
   }
 }
